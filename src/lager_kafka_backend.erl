@@ -59,14 +59,17 @@ init([_|Other], State) ->
 
 %% @private
 handle_call({set_loglevel, Level}, #state{id=Id} = State) ->
+  io:format("set_loglevel:~p| id:~p~n", [Level, Id]),
   case validate_loglevel(Level) of
     false ->
       {ok, {error, bad_loglevel}, State};
     Levels ->
+      io:format("set_loglevels:~p~n", [Levels]),
       ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Id, Level]),
       {ok, ok, State#state{level=Levels}}
   end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
+  io:format("get_loglevels:~p~n", [Level]),
   {ok, Level, State};
 handle_call(_Request, State) ->
   {ok, ok, State}.
