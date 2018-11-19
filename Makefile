@@ -13,6 +13,9 @@ tar: deps
 app: deps
 	@$(REBAR) compile
 
+eunit: deps
+	@$(REBAR) eunit
+
 deps:
 	@$(REBAR) get-deps
 

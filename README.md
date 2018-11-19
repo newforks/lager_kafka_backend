@@ -9,13 +9,24 @@ Build
     $ make
 
 
-Deps
---------
+Code Deps
+------------
 
     1. kafka client
     https://github.com/klarna/brod.git
     2. lager
     https://github.com/erlang-lager/lager
+    
+Other Deps
+---------------
+
+http://kafka.apache.org/:
+
+    % zookeeper
+    ./bin/zookeeper-server-start.sh config/zookeeper.properties
+    
+    % kafka server
+    ./bin/kafka-server-start.sh config/server.properties
     
 
 Config
@@ -23,19 +34,6 @@ Config
 
       {lager,
         [
-          {colored, true},
-          {colors,
-            [
-              {debug,     "\e[0;38m" },
-              {info,      "\e[1;37m" },
-              {notice,    "\e[1;36m" },
-              {warning,   "\e[1;33m" },
-              {error,     "\e[1;31m" },
-              {critical,  "\e[1;35m" },
-              {alert,     "\e[1;44m" },
-              {emergency, "\e[1;41m" }
-            ]
-          },
           {handlers,
             [
               {lager_kafka_backend, [

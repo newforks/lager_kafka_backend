@@ -9,19 +9,28 @@
 -module(lager_kafka_backend_tests).
 -author("zhaoweiguo").
 
-%% API
-
--define(DEFAULT_BROKER,           {"localhost", 9092}).
--define(DEFAULT_SENDMETHOD,       async).
--define(DEFAULT_FORMATTER,        lager_default_formatter).
--define(DEFAULT_FORMATTER_CONFIG, []).
-
 -include_lib("eunit/include/eunit.hrl").
 -compile([{parse_transform, lager_transform}]).
 
+-define(BACKEND, lager_kafka_backend).
 
-init_brod() ->
 
+set_loglevel_test() ->
+  setup(),
+  Level = error,
+  lager:set_loglevel(?BACKEND, Level),
+  Level=lager:get_loglevel(?BACKEND),
+  clear().
+
+write_kafka_test() ->
+  setup(),
+  ok=lager:log(info,  self(), "Test INFO message"),
+  ok=lager:log(error,  self(), "Test INFO message"),
+  clear().
+
+
+
+setup() ->
   {ok, _} = application:ensure_all_started(brod),
   {ok, _} = application:ensure_all_started(lager),
 
@@ -29,11 +38,11 @@ init_brod() ->
 %%    {lager_console_backend, debug},
     {lager_kafka_backend, [
       {level,                         "info"},
-      {topic,                         <<"topic">>},
+      {topic,                         <<"test-topic">>},
       {broker,                        [{"localhost", 9092}]},
       {send_method,                   async},
       {formatter,                     lager_default_formatter},
-      {formatter_config,              [date, " ", time, " ", message]}
+      {formatter_config,              [application, " ", metadata, " ", timestamp, " ", time, " ", message]}
     ]
     }
   ]),
@@ -42,12 +51,7 @@ init_brod() ->
 
   ok.
 
-set_loglevel_test() ->
+clear() ->
+  application:stop(lager),
+  application:stop(brod),
   ok.
-
-write_kafka_test() ->
-  init_brod(),
-  lager:log(info,  self(), "Test INFO message"),
-  ok.
-
-
