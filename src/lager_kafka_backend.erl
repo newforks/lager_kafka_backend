@@ -17,6 +17,7 @@
 -define(DEFAULT_SENDMETHOD,       async).
 -define(DEFAULT_FORMATTER,        lager_default_formatter).
 -define(DEFAULT_FORMATTER_CONFIG, []).
+-define(MAX_ERROR_LOG_NUM, 20).
 
 -record(state, {
   id                =?MODULE                    :: tuple(),
@@ -25,7 +26,14 @@
   method            = ?DEFAULT_SENDMETHOD       :: atom(),
   formatter         = ?DEFAULT_FORMATTER        :: atom(),
   formatter_config  = ?DEFAULT_FORMATTER_CONFIG :: any(),
-  broker            = ?DEFAULT_BROKER           :: any()
+  broker            = ?DEFAULT_BROKER           :: any(),
+  shaper
+}).
+
+
+-record(shaper, {
+  mps = 0,
+  lasttime = os:timestamp() :: erlang:timestamp()
 }).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
@@ -81,8 +89,8 @@ handle_event({log, Message}, #state{level = L, formatter = Formatter, formatter_
     true ->
       Msg = Formatter:format(Message, FormatConfig),
       NewMsg = unicode:characters_to_binary(Msg),
-      write_kafka(NewMsg, State),
-      {ok, State};
+      NewState = write_kafka(NewMsg, State),
+      {ok, NewState};
     false ->
       {ok, State}
   end;
@@ -113,20 +121,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%====================================================================
 
 
-write_kafka(Msg, #state{id = ClientId, topic = Topic, method = async } = State) ->
+write_kafka(Msg, #state{id = ClientId, topic = Topic, method = async, shaper = Shaper } = State) ->
   PartitionFun = fun(_Topic, Partition, _Key, _Value) ->
     {ok, crypto:rand_uniform(0, Partition)}
                  end,
 %%  PartitionFun = 0,
   case brod:produce(ClientId, Topic, PartitionFun, <<"">>, Msg) of
     {ok, _CallRef} ->
-      ok;
+      State;
     {error, Reason} ->
       % @todo send warning sms?
-      io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason])
-  end,
-  State;
-write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync } = State) ->
+      Shaper2 = case check_qps(Shaper) of
+        {false, _, NewShaper} ->
+          NewShaper;
+        {true, 0, NewShaper} ->
+          io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason]),
+          NewShaper;
+        {true, Mps, NewShaper} ->
+          io:format("error:[~p:~p]Number of Error Msg is = ~p; ~n", [?MODULE, ?LINE, Mps]),
+          NewShaper
+      end,
+      State#state{shaper = Shaper2}
+  end;
+write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync, shaper = Shaper } = State) ->
   PartitionFun = fun(_Topic, Partition, _Key, _Value) ->
     {ok, crypto:rand_uniform(0, Partition)}
                  end,
@@ -135,9 +152,39 @@ write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync } = State) -
       ok;
     {error, Reason} ->
       % @todo send warning sms?
-      io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason])
+      Shaper2 = case check_qps(Shaper) of
+                  {false, _, NewShaper} ->
+                    NewShaper;
+                  {true, 0, NewShaper} ->
+                    io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason]),
+                    NewShaper;
+                  {true, Mps, NewShaper} ->
+                    io:format("error:[~p:~p]Number of Error Msg is = ~p; ~n", [?MODULE, ?LINE, Mps]),
+                    NewShaper
+                end,
+      State#state{shaper = Shaper2}
   end,
   State.
+
+%% 检查是否应该写日志
+check_qps(#shaper{mps = Mps, lasttime = Last} = Shaper) when Mps < ?MAX_ERROR_LOG_NUM->
+  {M, S, _} = Now = os:timestamp(),
+  case Last of
+    {M, S, _} ->
+      {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+    _ ->
+      %different second - reset mps
+      {false, Mps, Shaper#lager_shaper{mps=0, lasttime = Now}}
+  end;
+check_qps(Shaper = #shaper{mps = Mps, lasttime = Last}) ->
+  {M, S, _} = Now = os:timestamp(),
+  case Last of
+    {M, S, _} ->
+      {false, 0, Shaper#lager_shaper{mps=Mps+1}};
+    _ ->
+      %different second - reset mps
+      {true, Mps, Shaper#lager_shaper{mps=0, lasttime = Now}}
+  end.
 
 
 
