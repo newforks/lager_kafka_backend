@@ -33,7 +33,7 @@
 
 
 init(Params) ->
-  io:format("init1:~p~n", [Params]),
+  io:format("lager_kafka_backend init:~p~n", [Params]),
   init(Params, #state{}).
 
 init([], State=#state{broker = Broker, id = ClientId, topic = Topic}) ->
@@ -59,17 +59,18 @@ init([_|Other], State) ->
 
 %% @private
 handle_call({set_loglevel, Level}, #state{id=Id} = State) ->
-  io:format("set_loglevel:~p| id:~p~n", [Level, Id]),
+%%  io:format("[~p:~p]set_loglevel:~p| id:~p~n", [?MODULE, ?LINE, Level, Id]),
   case validate_loglevel(Level) of
     false ->
+      io:format("[~p:~p]validate_loglevel: false~n", [?MODULE, ?LINE]),
       {ok, {error, bad_loglevel}, State};
     Levels ->
-      io:format("set_loglevels:~p~n", [Levels]),
+      io:format("[~p:~p]validate_loglevel:~p~n", [?MODULE, ?LINE, Levels]),
       ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Id, Level]),
       {ok, ok, State#state{level=Levels}}
   end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
-  io:format("get_loglevels:~p~n", [Level]),
+  io:format("[~p:~p]get_loglevels:~p~n", [?MODULE, ?LINE, Level]),
   {ok, Level, State};
 handle_call(_Request, State) ->
   {ok, ok, State}.
@@ -85,7 +86,8 @@ handle_event({log, Message}, #state{level = L, formatter = Formatter, formatter_
     false ->
       {ok, State}
   end;
-handle_event(_Event, State) ->
+handle_event(Event, State) ->
+  io:format("lager kafka event:~p~n", [Event]),
   {ok, State}.
 
 
@@ -121,7 +123,7 @@ write_kafka(Msg, #state{id = ClientId, topic = Topic, method = async } = State) 
       ok;
     {error, Reason} ->
       % @todo send warning sms?
-      io:format("Reason = ~p; ~n", [Reason])
+      io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason])
   end,
   State;
 write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync } = State) ->
@@ -133,7 +135,7 @@ write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync } = State) -
       ok;
     {error, Reason} ->
       % @todo send warning sms?
-      io:format("Reason = ~p; ~n", [Reason])
+      io:format("error:[~p:~p]brod:produce/4 Reason = ~p; ~n", [?MODULE, ?LINE, Reason])
   end,
   State.
 
