@@ -19,6 +19,11 @@
 -define(DEFAULT_FORMATTER_CONFIG, []).
 -define(MAX_ERROR_LOG_NUM, 20).
 
+-record(shaper, {
+  mps = 0,
+  lasttime = os:timestamp() :: erlang:timestamp()
+}).
+
 -record(state, {
   id                =?MODULE                    :: tuple(),
   level             =debug                      :: integer(),
@@ -31,10 +36,6 @@
 }).
 
 
--record(shaper, {
-  mps = 0,
-  lasttime = os:timestamp() :: erlang:timestamp()
-}).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
   code_change/3]).
