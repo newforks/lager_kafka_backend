@@ -27,7 +27,7 @@
   formatter         = ?DEFAULT_FORMATTER        :: atom(),
   formatter_config  = ?DEFAULT_FORMATTER_CONFIG :: any(),
   broker            = ?DEFAULT_BROKER           :: any(),
-  shaper
+  shaper            = #shaper{}
 }).
 
 
@@ -149,7 +149,7 @@ write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync, shaper = Sh
                  end,
   case brod:produce_sync(ClientId, Topic, PartitionFun, <<"">>, Msg) of
     ok ->
-      ok;
+      State;
     {error, Reason} ->
       % @todo send warning sms?
       Shaper2 = case check_qps(Shaper) of
@@ -163,27 +163,26 @@ write_kafka(Msg, #state{id = ClientId, topic = Topic, method = sync, shaper = Sh
                     NewShaper
                 end,
       State#state{shaper = Shaper2}
-  end,
-  State.
+  end.
 
 %% 检查是否应该写日志
 check_qps(#shaper{mps = Mps, lasttime = Last} = Shaper) when Mps < ?MAX_ERROR_LOG_NUM->
   {M, S, _} = Now = os:timestamp(),
   case Last of
     {M, S, _} ->
-      {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+      {true, 0, Shaper#shaper{mps=Mps+1}};
     _ ->
       %different second - reset mps
-      {false, Mps, Shaper#lager_shaper{mps=0, lasttime = Now}}
+      {false, Mps, Shaper#shaper{mps=0, lasttime = Now}}
   end;
 check_qps(Shaper = #shaper{mps = Mps, lasttime = Last}) ->
   {M, S, _} = Now = os:timestamp(),
   case Last of
     {M, S, _} ->
-      {false, 0, Shaper#lager_shaper{mps=Mps+1}};
+      {false, 0, Shaper#shaper{mps=Mps+1}};
     _ ->
       %different second - reset mps
-      {true, Mps, Shaper#lager_shaper{mps=0, lasttime = Now}}
+      {true, Mps, Shaper#shaper{mps=0, lasttime = Now}}
   end.
 
 
