@@ -17,7 +17,7 @@
 -define(DEFAULT_SENDMETHOD,       async).
 -define(DEFAULT_FORMATTER,        lager_default_formatter).
 -define(DEFAULT_FORMATTER_CONFIG, []).
--define(MAX_ERROR_LOG_NUM, 20).
+-define(MAX_ERROR_LOG_NUM, 2).
 
 -record(shaper, {
   mps = 0,
