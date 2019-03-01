@@ -14,7 +14,7 @@
 %% API
 -export([write_kafka/2]).
 -export([start/1]).
--export([]).
+-export([restart/1]).
 
 
 start(State=#state{broker = Broker, id = ClientId, topic = Topic}) ->
@@ -25,29 +25,41 @@ start(State=#state{broker = Broker, id = ClientId, topic = Topic}) ->
     catch
         Err:Exception  ->
             io:format("lager_kafka_backend brod start client fail. Err:~p, Exception:~p~n", [Err, Exception]),
-            timer:sleep(1000),
-            start(State)
+            do_write(State#state{worker_alive = false})
     end.
 
+restart(State=#state{id = ClientId}) ->
+    try
+        ok = brod:stop_client(ClientId)
+    catch
+        Err:Exception  ->
+            io:format("lager_kafka_backend brod stop client fail. Err:~p, Exception:~p~n", [Err, Exception])
+    end,
+    start(State).
 
 
-
-do_write(State=#state{worker_alive = false}) ->
-    start(State);
-do_write(State=#state{errors = Errors}) ->
+do_write(State=#state{errors = ?MAX_ERROR_NUM}) ->
+    restart(State#state{errors=0});
+do_write(State=#state{worker_alive = IsAlive, errors = Errors}) ->
     receive
         {log, Msg} ->
-            try
-                write_kafka(Msg, State),
-                do_write(State)
-            catch
-                _Err:_Exception  ->
-                    do_write(State#state{errors = Errors+1})
+            case IsAlive of
+                false ->
+                    do_write(State#state{errors = Errors+1});
+                true ->
+                    try
+                        write_kafka(Msg, State),
+                        do_write(State)
+                    catch
+                        _Err:_Exception  ->
+                            do_write(State#state{errors = Errors+1})
+                    end
             end;
         {reset, error, number} ->
             io:format("error number:~p~n", [Errors]),
             do_write(State#state{errors = 0});
         _ ->
+            % kafka ack ...
             do_write(State)
     end.
 

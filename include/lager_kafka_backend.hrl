@@ -26,3 +26,5 @@
 
 
 -define(undef, undefined).
+-define(MAX_ERROR_NUM, 1000).
+

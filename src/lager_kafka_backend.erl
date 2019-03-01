@@ -25,6 +25,7 @@ init(Params) ->
   init(Params, #state{}).
 
 init([], State) ->
+  process_flag(trap_exit, true),
   Pid = erlang:spawn_link(lager_kafka_worker, start, [State]),
   {ok, State#state{worker_pid = Pid}};
 init([{clientid, ClientId} | Other], State) ->
@@ -46,23 +47,16 @@ init([_|Other], State) ->
 
 %% @private
 handle_call({set_loglevel, Level}, #state{id=Id} = State) ->
-%%  io:format("[~p:~p]set_loglevel:~p| id:~p~n", [?MODULE, ?LINE, Level, Id]),
   case validate_loglevel(Level) of
     false ->
-      io:format("[~p:~p]validate_loglevel: false~n", [?MODULE, ?LINE]),
       {ok, {error, bad_loglevel}, State};
     Levels ->
-      io:format("[~p:~p]validate_loglevel:~p~n", [?MODULE, ?LINE, Levels]),
       ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Id, Level]),
       {ok, ok, State#state{level=Levels}}
   end;
-handle_call(get_loglevel, #state{level=Level} = State) ->
-  io:format("[~p:~p]get_loglevels:~p~n", [?MODULE, ?LINE, Level]),
-  {ok, Level, State};
-% 检查kafka worker是否工作正常
-handle_call(check_kafka_worker, #state{worker_pid = Pid} = State) ->
+handle_call(get_loglevel, #state{level=Level, worker_pid = Pid} = State) ->
   Pid ! {reset, error, number},
-  {ok, ok, State};
+  {ok, Level, State};
 handle_call(_Request, State) ->
   {ok, ok, State}.
 
@@ -78,11 +72,15 @@ handle_event({log, Message}, #state{level = L, formatter = Formatter, formatter_
       {ok, State}
   end;
 handle_event(Event, State) ->
-  io:format("lager kafka event:~p~n", [Event]),
+  io:format("lager_kafka_backend unexpected event:~p~n", [Event]),
   {ok, State}.
 
 
 %% @private
+handle_info({'EXIT', From, Reason}, State=#state{worker_pid = From}) ->
+  io:format("lager_kafka_worker exit, Reason:~p~n", [Reason]),
+  Pid = erlang:spawn_link(lager_kafka_worker, start, [State]),
+  {ok, State#state{worker_pid = Pid}};
 handle_info(_Info, State) ->
   {ok, State}.
 
