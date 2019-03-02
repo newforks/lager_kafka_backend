@@ -39,6 +39,9 @@ restart(State=#state{id = ClientId}) ->
 
 
 do_write(State=#state{errors = ?MAX_ERROR_NUM}) ->
+    % @todo 要不要打印？
+    % 打印: 数据量大时有问题
+    % 不打印: 不好定位问题
     restart(State#state{errors=0});
 do_write(State=#state{worker_alive = IsAlive, errors = Errors}) ->
     receive
