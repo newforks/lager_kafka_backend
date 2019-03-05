@@ -14,55 +14,28 @@
 %% API
 -export([write_kafka/2]).
 -export([start/1]).
--export([restart/1]).
 
 
 start(State=#state{broker = Broker, id = ClientId, topic = Topic}) ->
-    try
-        ok = brod:start_client(Broker, ClientId, []),
-        ok = brod:start_producer(ClientId, Topic, []),
-        do_write(State#state{worker_alive = true})
-    catch
-        Err:Exception  ->
-            io:format("lager_kafka_backend brod start client fail. Err:~p, Exception:~p~n", [Err, Exception]),
-            do_write(State#state{worker_alive = false})
-    end.
+    ok = brod:start_client(Broker, ClientId, []),
+    ok = brod:start_producer(ClientId, Topic, []),
+    do_write(State).
 
-restart(State=#state{id = ClientId}) ->
-    try
-        ok = brod:stop_client(ClientId)
-    catch
-        Err:Exception  ->
-            io:format("lager_kafka_backend brod stop client fail. Err:~p, Exception:~p~n", [Err, Exception])
-    end,
-    start(State).
-
-
-do_write(State=#state{errors = ?MAX_ERROR_NUM}) ->
-    % @todo 要不要打印？
-    % 打印: 数据量大时有问题
-    % 不打印: 不好定位问题
-    restart(State#state{errors=0});
-do_write(State=#state{worker_alive = IsAlive, errors = Errors}) ->
+do_write(State=#state{errors = Errors}) ->
     receive
         {log, Msg} ->
-            case IsAlive of
-                false ->
-                    do_write(State#state{errors = Errors+1});
-                true ->
-                    try
-                        write_kafka(Msg, State),
-                        do_write(State)
-                    catch
-                        _Err:_Exception  ->
-                            do_write(State#state{errors = Errors+1})
-                    end
+            case write_kafka(Msg, State) of
+                ok ->
+                    do_write(State);
+                error ->
+                    do_write(State#state{errors = Errors+1})
             end;
         {reset, error, number} ->
-            io:format("error number:~p~n", [Errors]),
+            io:format("write error number:~p~n", [Errors]),
             do_write(State#state{errors = 0});
         _ ->
             % kafka ack ...
+            % @todo 对ack进行区别分析
             do_write(State)
     end.
 

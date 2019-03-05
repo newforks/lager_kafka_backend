@@ -95,6 +95,10 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
 validate_loglevel(Level) ->
   try lager_util:config_to_mask(Level) of
     Levels ->
